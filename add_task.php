@@ -1,24 +1,47 @@
 <?php
-require_once 'includes/db_config.php';
+require_once 'includes/config.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['task'])) {
-    $task = trim($_POST['task']);
+header('Content-Type: application/json');
 
-    if (!empty($task)) {
-        try {
-            $stmt = $pdo->prepare("INSERT INTO tasks (task_name) VALUES (?)");
-            $stmt->execute([$task]);
-            echo "Task added successfully!";
-        } catch (PDOException $e) {
-            http_response_code(500); // Internal Server Error
-            echo "Error adding task: " . $e->getMessage();
-        }
-    } else {
-        http_response_code(400); // Bad Request
-        echo "Task cannot be empty.";
-    }
-} else {
-    http_response_code(405); // Method Not Allowed
-    echo "Invalid request method or missing task data.";
+if (!isLoggedIn()) {
+    echo json_encode(['success' => false, 'message' => 'Not authenticated']);
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+    exit;
+}
+
+$title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
+$description = filter_input(INPUT_POST, 'description', FILTER_SANITIZE_STRING);
+$due_date = filter_input(INPUT_POST, 'due_date', FILTER_SANITIZE_STRING);
+$priority = filter_input(INPUT_POST, 'priority', FILTER_SANITIZE_STRING);
+$status = filter_input(INPUT_POST, 'status', FILTER_SANITIZE_STRING);
+
+if (!$title) {
+    echo json_encode(['success' => false, 'message' => 'Title is required']);
+    exit;
+}
+
+try {
+    $conn = getDBConnection();
+    $stmt = $conn->prepare("
+        INSERT INTO tasks (user_id, title, description, due_date, priority, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ");
+    
+    $stmt->execute([
+        $_SESSION['user_id'],
+        $title,
+        $description,
+        $due_date ?: null,
+        $priority ?: 'Low',
+        $status ?: 'To Do'
+    ]);
+
+    echo json_encode(['success' => true]);
+} catch (PDOException $e) {
+    echo json_encode(['success' => false, 'message' => 'Database error']);
 }
 ?>
